@@ -68,6 +68,15 @@ extern "C" {
 #define MAX_RETRIES_FOR_PGF     (3)
 
 typedef enum {
+    DWT_FAST_RESTORE = 0U,            /* Deprecated: use only when dwt_configure() follows wake. */
+    DWT_STANDARD_RESTORE = 1U,        /* Deprecated: split restore is preferred for new code. */
+    DWT_FORCE_ADCOFFSET_CAL = 2U,
+    DWT_RESTORE_RX_ONLY_MODE = 0x04U,
+    DWT_RESTORE_TX_ONLY_MODE = 0x08U,
+    DWT_RESTORE_TXRX_MODE = 0x0CU
+} dwt_restore_type_e;
+
+typedef enum {
     AOA,
     NON_AOA
 } dw3000type_e;
@@ -864,6 +873,27 @@ void dwt_setdwstate(int state);
  * no return value
  */
 void dwt_enablegpioclocks(void);
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @brief This function needs to be called after device is woken up from DEEPSLEEP/SLEEP state, to restore common
+ * configuration which has not been automatically restored from AON.
+ *
+ * input parameters none
+ *
+ * no return value
+ */
+void dwt_restore_common(void);
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @brief This function needs to be called after device is woken up from DEEPSLEEP/SLEEP state, and after
+ * dwt_restore_common(), to restore TX/RX state which has not been automatically restored from AON.
+ *
+ * input parameters
+ * @param restore_mask - DWT_RESTORE_RX_ONLY_MODE, DWT_RESTORE_TX_ONLY_MODE, or DWT_RESTORE_TXRX_MODE
+ *
+ * return DWT_SUCCESS or DWT_ERROR
+ */
+int32_t dwt_restore_txrx(uint8_t restore_mask);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @brief This function needs to be called after device is woken up from DEEPSLEEP/SLEEP state, to restore the

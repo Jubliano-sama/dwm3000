@@ -1240,10 +1240,10 @@ void dwt_configmrxlut(int channel)
  *
  * input parameters
  *
- * return DWT_SUCCESS
+ * no return value
  *
  */
-void dwt_restoreconfig(void)
+void dwt_restore_common(void)
 {
     uint8_t channel = 5;
     uint16_t chan_ctrl;
@@ -1282,6 +1282,98 @@ void dwt_restoreconfig(void)
             dwt_configmrxlut(channel);
         }
     }
+}
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @brief This function needs to be called after device is woken up from DEEPSLEEP/SLEEP state, and after
+ * dwt_restore_common(), to restore TX/RX state which has not been automatically restored from AON.
+ *
+ * input parameters
+ * @param restore_mask - DWT_RESTORE_RX_ONLY_MODE, DWT_RESTORE_TX_ONLY_MODE, or DWT_RESTORE_TXRX_MODE
+ *
+ * return DWT_SUCCESS or DWT_ERROR
+ *
+ */
+int32_t dwt_restore_txrx(uint8_t restore_mask)
+{
+    uint8_t restore_rx = (restore_mask & DWT_RESTORE_RX_ONLY_MODE) != 0U;
+    uint8_t restore_tx = (restore_mask & DWT_RESTORE_TX_ONLY_MODE) != 0U;
+    uint8_t channel = 5;
+    uint8_t cnt;
+    uint8_t flag;
+
+    if ((restore_rx == 0U) && (restore_tx == 0U))
+    {
+        return DWT_SUCCESS;
+    }
+
+    if (dwt_read8bitoffsetreg(CHAN_CTRL_ID, 0) & 0x1)
+    {
+        channel = 9;
+    }
+
+    if (channel == 9)
+    {
+        if (restore_tx)
+        {
+            dwt_write32bitoffsetreg(TX_CTRL_HI_ID, 0, RF_TXCTRL_CH9);
+        }
+        dwt_write16bitoffsetreg(PLL_CFG_ID, 0, RF_PLL_CFG_CH9);
+        if (restore_rx)
+        {
+            dwt_write32bitoffsetreg(RX_CTRL_HI_ID, 0, RF_RXCTRL_CH9);
+        }
+    }
+    else
+    {
+        if (restore_tx)
+        {
+            dwt_write32bitoffsetreg(TX_CTRL_HI_ID, 0, RF_TXCTRL_CH5);
+        }
+        dwt_write16bitoffsetreg(PLL_CFG_ID, 0, RF_PLL_CFG_CH5);
+    }
+
+    dwt_write8bitoffsetreg(LDO_RLOAD_ID, 1, LDO_RLOAD_VAL_B1);
+    dwt_write8bitoffsetreg(TX_CTRL_LO_ID, 2, RF_TXCTRL_LO_B2);
+    dwt_write8bitoffsetreg(PLL_CAL_ID, 0, RF_PLL_CFG_LD);
+    dwt_write8bitoffsetreg(SYS_STATUS_ID, 0, SYS_STATUS_CP_LOCK_BIT_MASK);
+
+    dwt_setdwstate(DWT_DW_IDLE);
+
+    for (flag = 1, cnt = 0; cnt < MAX_RETRIES_FOR_PLL; cnt++)
+    {
+        deca_usleep(DELAY_20uUSec);
+        if ((dwt_read8bitoffsetreg(SYS_STATUS_ID, 0) & SYS_STATUS_CP_LOCK_BIT_MASK))
+        {
+            flag = 0;
+            break;
+        }
+    }
+    if (flag)
+    {
+        return DWT_ERROR;
+    }
+
+    if (restore_rx && (dwt_pgf_cal(1) != DWT_SUCCESS))
+    {
+        return DWT_ERROR;
+    }
+
+    return DWT_SUCCESS;
+}
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @brief Deprecated compatibility wrapper. New code should call dwt_restore_common() and dwt_restore_txrx().
+ *
+ * input parameters
+ *
+ * no return value
+ *
+ */
+void dwt_restoreconfig(void)
+{
+    dwt_restore_common();
+    (void)dwt_restore_txrx(DWT_RESTORE_TXRX_MODE);
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
